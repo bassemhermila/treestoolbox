@@ -165,6 +165,25 @@ class TreeMetrics(Topology):
         return eucl_dist
     
 
+    def surf(self, isfrustum=False):
+        '''Surface values for tree segments.
+        
+            Returns the surface of all tree segments using the X,Y,Z and D
+            coordinates and the adjacency matrix [in um2].
+        '''
+        lengths = self.len()
+        D = self.D.copy()
+        if isfrustum:
+            direct_parents_indices = self.idpar()
+            # Surface according to frustum (cone) -like  segments:
+            surfaces = (np.pi * (D + D[direct_parents_indices]) / 2) * (
+                np.sqrt(lengths**2 + (D - D[direct_parents_indices])**2 / 4))
+        else:
+            # Surface according to cylinder segments:
+            surfaces = np.pi * D * lengths
+        return surfaces
+    
+    
     def sholl(self, diameter_difference=50, only_single=False):
         '''Real sholl analysis.
 

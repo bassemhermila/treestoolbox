@@ -169,6 +169,38 @@ class Topology:
         return level_order
     
 
+    def bin(self, vec=None, bins=10):
+        '''Binning nodes in a tree.
+        
+            Subdivides the nodes into bins according to a vector 'vec'. This is simply
+            the histogram and can be applied for example on x-values, euclidean
+            distances (like scholl analysis) or any other values.
+
+        '''
+        if vec is None:
+            vec = self.eucl()
+
+        if isinstance(bins, int):
+            bins = np.histogram_bin_edges(vec, bins)
+        
+        bin_histogram, _ = np.histogram(vec, bins)
+        bin_index = np.digitize(vec, bins)
+        return bin_index, bins, bin_histogram
+    
+
+    def ratio(self, vec=None):
+        '''Ratio between parent and daughter segments in a tree.
+        
+            Returns ratio values between daughter nodes and parent nodes for any
+            values given in vector 'vec'. Typically this is applied on the diameter.
+        '''
+        if vec is None:
+            vec = self.D.copy()
+        direct_parents_indices = self.idpar()
+        ratio_val = vec / vec[direct_parents_indices]
+        return ratio_val
+    
+
     # TODO || Figure out how to better incorporate this function in the module
     def __sub(self, inode=0):
         subtree_indices = np.zeros((self.dA.shape[0], 1), dtype=int)
