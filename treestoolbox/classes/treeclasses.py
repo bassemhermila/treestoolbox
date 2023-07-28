@@ -4,14 +4,14 @@ from copy import deepcopy
 from tools import treeio, metrics, graphtheory
 
 class Tree(treeio.TreeLoader, 
-           metrics.TreeMetrics, 
-           graphtheory.Topology):
+           metrics.Metrics, 
+           graphtheory.GraphTheory):
     '''
     Tree class containing the information of a dendritic morphology.
     '''
     def __init__(self, 
                  name='', 
-                 dA=sp.csr_matrix([], dtype=int),
+                 dA=sp.csc_matrix([], dtype=int),
                  X=np.array([]),
                  Y=np.array([]),
                  Z=np.array([]),
@@ -29,13 +29,3 @@ class Tree(treeio.TreeLoader,
     def copy(self):
         tree_copy = deepcopy(self)
         return tree_copy
-
-    def sub(self, inode=0):
-        res = self._Topology__sub(inode)
-        return res['subtree_indices'], Tree(name=self.name,
-              dA=res['dA'],
-              X=res['X'],
-              Y=res['Y'],
-              Z=res['Z'],
-              R=res['R'],
-              D=res['D'])

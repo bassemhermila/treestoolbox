@@ -1,31 +1,31 @@
 import scipy.sparse as sp
 import numpy as np
 
-class Topology:
+class GraphTheory:
     def __get_num_children(self):
         # The number of children of each node is the sum over its column in the adjacency matrix:
-        num_children = sp.csc_matrix.sum(self.dA, axis=0)
+        num_children = np.ravel(sp.csc_matrix.sum(self.dA, axis=0))
         return num_children
         
 
     def B(self):
         '''Returns the branching points, i.e. points that have more than one child, in a tree.'''
         num_children = self.__get_num_children()
-        branch_points = [node for node, n in enumerate(np.nditer(num_children)) if n > 1]
+        branch_points = [node for node, n in enumerate(num_children) if n > 1]
         return branch_points
     
 
     def T(self):
         '''Returns the termination points, i.e. points that do not have any children, in a tree.'''
         num_children = self.__get_num_children()
-        terminal_points = [node for node, n in enumerate(np.nditer(num_children)) if n == 0]
+        terminal_points = [node for node, n in enumerate(num_children) if n == 0]
         return terminal_points
     
 
     def C(self):
         '''Returns the continuation points, i.e. points that have only one child, in a tree.'''
         num_children = self.__get_num_children()
-        continuation_points = [node for node, n in enumerate(np.nditer(num_children)) if n == 1]
+        continuation_points = [node for node, n in enumerate(num_children) if n == 1]
         return continuation_points
     
 
@@ -95,7 +95,7 @@ class Topology:
             counter += 1
             tmp_PL = self.dA.dot(tmp_PL)
             topological_path_length += counter * tmp_PL
-        topological_path_length = topological_path_length.toarray()
+        topological_path_length = topological_path_length.toarray().flatten()
         return topological_path_length
     
 
@@ -172,6 +172,12 @@ class Topology:
 
 
     def LO(self):
+        '''Level order of all nodes of a tree.
+        
+            Returns the summed topological path distance of all child branches to the
+            root. The function is called level order and is useful to classify rooted
+            trees into isomorphic classes.
+        '''
         num_nodes = self.dA.shape[0]
         PL = self.PL().flatten()
         PL_diag = sp.diags(PL, 0, (num_nodes, num_nodes), dtype=int)
@@ -252,8 +258,12 @@ class Topology:
         return distance
 
 
-    # TODO || Figure out how to better incorporate this function in the module
-    def __sub(self, inode=0):
+    def sub(self, inode=0):
+        '''Indices to child nodes forming a subtree.
+        
+            Returns the indices of a subtree indicated by starting node inode.
+        '''
+        subtree = self.copy()
         subtree_indices = np.zeros((self.dA.shape[0], 1), dtype=int)
         sub_dA = self.dA[:, inode]
         subtree_indices[inode] = 1
@@ -262,18 +272,83 @@ class Topology:
             sub_dA = self.dA.dot(sub_dA)
 
         subtree_indices = subtree_indices.nonzero()[0]
-        dA = self.dA[subtree_indices][:, subtree_indices]
-        X = self.X[subtree_indices]
-        Y = self.Y[subtree_indices]
-        Z = self.Z[subtree_indices]
-        R = self.R[subtree_indices]
-        D = self.D[subtree_indices]
-        return {
-            'subtree_indices': subtree_indices, 
-            'dA': dA, 
-            'X': X, 
-            'Y': Y, 
-            'Z': Z, 
-            'R': R, 
-            'D': D
-            }
+        subtree.dA = self.dA[subtree_indices][:, subtree_indices]
+        subtree.X = self.X[subtree_indices]
+        subtree.Y = self.Y[subtree_indices]
+        subtree.Z = self.Z[subtree_indices]
+        subtree.R = self.R[subtree_indices]
+        subtree.D = self.D[subtree_indices]
+        return subtree_indices, subtree
+
+
+    def sort(self, order=''):
+        '''Sorts indices of the nodes in tree to be BCT conform.
+        
+            Puts the indices in the so-called BCT order, an order in which elements
+            are arranged according to their hierarchy keeping the subtree-structure
+            intact. Many isomorphic BCT order structures exist, this one is created
+            by switching the location of each element one at a time to the
+            neighboring position of their parent element. For a unique sorting use
+            'LO' or 'LEX'. 'LO' orders the indices using path length and level order.
+            This results in a relatively unique equivalence relation. 'LEX' orders 
+            the BCT elements lexicographically. This makes less sense but results in 
+            a purely unique equivalence relation.
+        '''
+        def sort_vectors(tree, sorted_indices):
+            tree.dA = tree.dA[sorted_indices][:, sorted_indices]
+            tree.X = tree.X[sorted_indices]
+            tree.Y = tree.Y[sorted_indices]
+            tree.Z = tree.Z[sorted_indices]
+            tree.D = tree.D[sorted_indices]
+            tree.R = tree.R[sorted_indices]
+            return tree
+
+        tree = self.copy()
+        num_nodes = tree.dA.shape[0]
+        if order.lower() == 'lo':
+            topological_path_length = tree.PL()
+            level_order = tree.LO()
+            sorted_indices = np.lexsort((level_order, topological_path_length))
+            tree = sort_vectors(tree, sorted_indices)
+        elif order.lower() == 'lex':
+            num_children = self.__get_num_children()
+            # np.ravel(sp.csc_matrix.sum(intree.dA, axis=0))
+            sorted_indices = np.argsort(num_children[1:])
+            sorted_indices = np.hstack((0, sorted_indices + 1))
+            tree = sort_vectors(tree, sorted_indices)
+        else:
+            sorted_indices = np.arange(0, tree.dA.shape[0])
+
+        direct_parents_indices = tree.idpar()
+        indices_to_update = np.arange(0, num_nodes)
+        tmp_indices = np.arange(0, num_nodes)
+        for i in range(1, num_nodes):
+            node = tmp_indices[i]
+            parent_node = tmp_indices[direct_parents_indices[i]]
+            if parent_node > node:
+                current_order = np.hstack((
+                    np.arange(0, node),
+                    np.arange(node + 1, parent_node + 1),
+                    node,
+                    np.arange(parent_node + 1, num_nodes)
+                ))
+            elif parent_node == node:
+                current_order = np.hstack((
+                    parent_node,
+                    node,
+                    np.arange(0, node),
+                    np.arange(node + 1, num_nodes)
+                ))
+            else:
+                current_order = np.hstack((
+                    np.arange(0, parent_node + 1),
+                    node,
+                    np.arange(parent_node + 1, node),
+                    np.arange(node + 1, num_nodes)
+                ))
+            indices_to_update = indices_to_update[current_order]
+            tmp_indices = np.argsort(indices_to_update)
+        
+        sorted_indices = sorted_indices[indices_to_update]
+        tree = sort_vectors(tree, indices_to_update)
+        return tree, sorted_indices

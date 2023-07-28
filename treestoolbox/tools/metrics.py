@@ -1,8 +1,8 @@
-from tools.graphtheory import Topology
+from tools.graphtheory import GraphTheory
 import numpy as np
 import scipy.sparse as sp
 
-class TreeMetrics(Topology):
+class Metrics(GraphTheory):
     def cyl(self, dim='3D', use_dA=False):
         '''Returns the cylinder coordinates of all segments in a tree.
 
@@ -326,3 +326,190 @@ class TreeMetrics(Topology):
             'inter_points_indices': inter_points_indices,
             'diameter_difference': diameter_difference
         }
+    
+
+    def tran(self, point=0):
+        '''Translates the coordinates of a tree.
+        
+            Translates the coordinates of a tree, per default sets tree root to
+            origin (0, 0, 0).
+        '''
+        tree = self.copy()
+
+        if isinstance(point, int):
+            point = np.array([self.X[point], self.Y[point], self.Z[point]])
+            tree.X = self.X - point[0]
+            tree.Y = self.Y - point[1]
+            tree.Z = self.Z - point[2]
+        elif len(point) == 3:
+            tree.X = self.X + point[0]
+            tree.Y = self.Y + point[1]
+            tree.Z = self.Z + point[2]
+        elif len(point) == 2:
+            point = np.concatenate((point, [0]))
+            tree.X = self.X + point[0]
+            tree.Y = self.Y + point[1]
+            tree.Z = self.Z + point[2]
+        return tree
+
+
+    def flatten(self):
+        '''Flattens a tree onto XY plane.
+        
+            Flattens a tree onto the XY plane by conserving the lengths of the
+            individual compartments.
+        '''
+        tree = self.copy()
+
+        # Parent index structure:
+        path_to_root = tree.ipar()
+
+        # Set root Z to 0
+        tree = tree.tran([0, 0, -tree.Z[0]])
+
+        eps = 1e-3
+        if np.all(tree.Z < eps):
+            tree.Z[:] = 0
+            print('Tree is already flat, nothing to do here..')
+            return tree
+
+        for i in range(1, len(tree.X)):
+            # Node to parent node differences:
+            dX = tree.X[i] - tree.X[path_to_root[i, 1]]
+            dY = tree.Y[i] - tree.Y[path_to_root[i, 1]]
+            dZ = tree.Z[i] - tree.Z[path_to_root[i, 1]]
+            xy = np.sqrt(dX**2 + dY**2)  # 2D segment length
+            xyz = np.sqrt(dX**2 + dY**2 + dZ**2)  # 3D segment length
+
+            if xy != 0:
+                # Correct for 3D to 2D loss of length, move sub-tree:
+                u = xyz / xy
+                indices = np.where(path_to_root == i)
+                rows = indices[0]
+                tree.X[rows] += (u - 1) * dX
+                tree.Y[rows] += (u - 1) * dY
+                tree.Z[rows] -= dZ
+                tree.Z[i] = 0
+            else:
+                # Move horizontally when zero length XY:
+                indices = np.where(path_to_root == i)
+                rows = indices[0]
+                tree.X[rows] += xyz
+                tree.Z[rows] -= dZ
+                tree.Z[i] = 0
+        return tree
+
+
+    def scale(self, scaling_factor=2, 
+                translate=True, scale_diameter=True):
+        '''Scales a tree.
+        
+            Scales the entire tree by factor fac at the location where 
+            it is. If the size of scaling_factor is 3, the scaling can 
+            be different for X, Y and Z. By default, diameter is also 
+            scaled (as average between X and Y scaling).
+        '''
+        tree = self.copy()
+
+        if translate:
+            tree = tree.tran()
+
+        if isinstance(scaling_factor, (int, float)):
+            tree.X = tree.X * scaling_factor
+            tree.Y = tree.Y * scaling_factor
+            tree.Z = tree.Z * scaling_factor
+            if scale_diameter:
+                tree.D = tree.D * scaling_factor
+        elif len(scaling_factor) == 3:
+            tree.X = tree.X * scaling_factor[0]
+            tree.Y = tree.Y * scaling_factor[1]
+            tree.Z = tree.Z * scaling_factor[2]
+            if scale_diameter:
+                tree.D = tree.D * np.mean(scaling_factor[1:3])
+        
+        if translate:
+            original_root_coords = np.array([self.X[0], self.Y[0], self.Z[0]])
+            tree = tree.tran(original_root_coords)
+        return tree
+
+
+    def flip(self, dim='x'):
+        '''Flips a tree around one axis.'''
+        tree = self.copy()
+
+        match dim.lower():
+            case 'x':
+                tree.X = 2*tree.X[0] - tree.X
+            case 'y':
+                tree.Y = 2*tree.Y[0] - tree.Y
+            case 'z':
+                tree.Z = 2*tree.Z[0] - tree.Z
+            case _:
+                print('Dimension chosen is not valid. The tree was not flipped.')
+        return tree
+
+
+    def morph(self, vec=None):
+        '''Morph a metrics preserving angles and topology.
+        
+            Morphs a tree's metrics without changing angles or topology. 
+            Attributes length values from v to the individual segments 
+            but keeps the branching structure otherwise intact. This can 
+            result in a huge mess (overlap between previously 
+            non-overlapping segments) or extreme sparseness depending on 
+            the tree. This is a META-FUNCTION and can lead to various
+            applications. This funciton provides universal application to 
+            all possible morpho-electrotonic transforms and much much more.
+        '''
+        tree = self.copy()
+        if vec is None:
+            vec = np.ones(tree.dA.shape[0]) * 10
+        
+        path_to_root = tree.ipar()
+        tree = tree.tran()  # Center onto the root
+        lengths = tree.len()
+        for i in range(1, len(tree.X)):
+            if lengths[i] != vec[i]:
+                # Node to parent node differences:
+                dX = tree.X[i] - tree.X[path_to_root[i, 1]]
+                dY = tree.Y[i] - tree.Y[path_to_root[i, 1]]
+                dZ = tree.Z[i] - tree.Z[path_to_root[i, 1]]
+                xyz = np.sqrt(dX**2 + dY**2 + dZ**2)  # 3D segment length
+                # Find sub-tree indices:
+                sub = tree.sub(i) ############################
+                subtree_indices = sub[0]
+                # Correct for change loss of length, move sub-tree:
+                if xyz == 0:
+                    # If original length is zero, no direction is given -> random:
+                    r = np.random.rand(1, 3)
+                    r = r / np.sqrt(np.sum(r ** 2))
+                    dX = r[0]
+                    dY = r[1]
+                    dZ = r[2]
+                    xyz = 1
+                tree.X[subtree_indices] = tree.X[subtree_indices] - dX + vec[i]*(dX / xyz)
+                tree.Y[subtree_indices] = tree.Y[subtree_indices] - dY + vec[i]*(dY / xyz)
+                tree.Z[subtree_indices] = tree.Z[subtree_indices] - dZ + vec[i]*(dZ / xyz)
+
+        # Move the tree back
+        original_root_coords = np.array([self.X[0], self.Y[0], self.Z[0]])
+        tree = tree.tran(original_root_coords)
+        return tree
+
+
+    def zcorr(self, z_threshold=5):
+        '''Corrects neurolucida z-artifacts.
+        
+            While reconstructing cells with Neurolucida sudden shifts in the z-axis
+            can occur. This function is to correct automatically for those effects.
+            Any jump in the z-axis more than the threshold is subtracted from the 
+            entire subtree.
+        '''
+        tree = self.copy()
+        direct_parents_indices = tree.idpar()
+        z_difference = tree.Z[direct_parents_indices] - tree.Z
+        indices = np.where(np.abs(z_difference) > z_threshold)[0]
+        for i in indices:
+            isub, _ = tree.sub(i)
+            tree.Z[isub] = tree.Z[isub] + z_difference[i]
+        return tree
