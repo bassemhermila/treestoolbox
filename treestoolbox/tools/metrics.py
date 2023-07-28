@@ -97,7 +97,7 @@ class TreeMetrics(Topology):
         if path_to_root.shape[0] == 1:
             path_vec_cumsum = vec
         else:
-            path_vec_cumsum = np.sum(lengths0[path_to_root], axis=1)
+            path_vec_cumsum = np.sum(lengths0[path_to_root+1], axis=1)
         return path_vec_cumsum
     
 
@@ -184,6 +184,24 @@ class TreeMetrics(Topology):
         return surfaces
     
     
+    def direction(self, normalize=True):
+        '''Direction vectors of all nodes from parents.
+        
+            Returns the vectors between the consecutive nodes.
+        '''
+        num_nodes = self.dA.shape[0]
+        direct_parents_indices = self.idpar()
+        direction = np.zeros((num_nodes, 3))
+        for i in np.arange(0, num_nodes):
+            direction[i, 0] = self.X[i] - self.X[direct_parents_indices[i]]
+            direction[i, 1] = self.Y[i] - self.Y[direct_parents_indices[i]]
+            direction[i, 2] = self.Z[i] - self.Z[direct_parents_indices[i]]
+            if normalize and i != 0:
+                direction[i, :] = direction[i, :] / np.linalg.norm(direction[i, :])
+        direction[0, :] = direction[1, :]
+        return direction
+
+
     def sholl(self, diameter_difference=50, only_single=False):
         '''Real sholl analysis.
 
@@ -269,7 +287,8 @@ class TreeMetrics(Topology):
             inter_points_X = np.append(inter_points_X, Xs1)
             inter_points_Y = np.append(inter_points_Y, Ys1)
             inter_points_Z = np.append(inter_points_Z, Zs1)
-            inter_points_indices = np.append(inter_points_indices, i * np.ones((len(np.where(iu1)[0]), 1)))
+            inter_points_indices = np.append(inter_points_indices, 
+                                             i * np.ones((len(np.where(iu1)[0]), 1)))
             
             # Then u2 points:
             iu2 = ~np.isnan(u2)
@@ -285,9 +304,11 @@ class TreeMetrics(Topology):
             inter_points_X = np.append(inter_points_X, Xs2)
             inter_points_Y = np.append(inter_points_Y, Ys2)
             inter_points_Z = np.append(inter_points_Z, Zs2)
-            inter_points_indices = np.append(inter_points_indices, i * np.ones((len(np.where(iu2)[0]), 1)))
+            inter_points_indices = np.append(inter_points_indices, 
+                                             i * np.ones((len(np.where(iu2)[0]), 1)))
 
-            sholl_intersections = np.append(sholl_intersections, np.sum(iu1) + np.sum(iu2))
+            sholl_intersections = np.append(sholl_intersections, 
+                                            np.sum(iu1) + np.sum(iu2))
             double_intersections = np.append(double_intersections, np.sum(iu1 & ~iu2))
 
         sholl_intersections[diameter_difference == 0] = 1

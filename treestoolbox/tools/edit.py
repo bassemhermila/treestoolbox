@@ -137,7 +137,7 @@ def morph(intree: Tree, vec=None):
             dZ = tree.Z[i] - tree.Z[path_to_root[i, 1]]
             xyz = np.sqrt(dX**2 + dY**2 + dZ**2)  # 3D segment length
             # Find sub-tree indices:
-            sub = tree.sub_tree(i) ############################
+            sub = tree.sub(i) ############################
             subtree_indices = sub[0]
             # Correct for change loss of length, move sub-tree:
             if xyz == 0:
@@ -155,4 +155,22 @@ def morph(intree: Tree, vec=None):
     # Move the tree back
     original_root_coords = np.array([intree.X[0], intree.Y[0], intree.Z[0]])
     tree = tran(tree, original_root_coords)
+    return tree
+
+
+def zcorr(intree: Tree, z_threshold=5):
+    '''Corrects neurolucida z-artifacts.
+    
+        While reconstructing cells with Neurolucida sudden shifts in the z-axis
+        can occur. This function is to correct automatically for those effects.
+        Any jump in the z-axis more than the threshold is subtracted from the 
+        entire subtree.
+    '''
+    tree = __instantiate(intree)
+    direct_parents_indices = tree.idpar()
+    z_difference = tree.Z[direct_parents_indices] - tree.Z
+    indices = np.where(np.abs(z_difference) > z_threshold)[0]
+    for i in indices:
+        isub, _ = tree.sub(i)
+        tree.Z[isub] = tree.Z[isub] + z_difference[i]
     return tree

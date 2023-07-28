@@ -4,7 +4,7 @@ import numpy as np
 class Topology:
     def __get_num_children(self):
         # The number of children of each node is the sum over its column in the adjacency matrix:
-        num_children = sp.csr_matrix.sum(self.dA, axis=0)
+        num_children = sp.csc_matrix.sum(self.dA, axis=0)
         return num_children
         
 
@@ -56,7 +56,6 @@ class Topology:
         if BCT:
             strs = {0: 'T', 1: 'C', 2: 'B'}
             BCT_type = [strs[val] for val in BCT_type]
-
         return BCT_type
 
 
@@ -66,6 +65,23 @@ class Topology:
         direct_parents_indices = self.dA.dot(indices)  # The parent for the root node will be itself
         return direct_parents_indices
     
+
+    def idchild(self, ipart=None):
+        '''Index to direct child nodes in a tree.
+        
+            Returns the indices to the direct child nodes for each individual node in
+            the tree.
+        '''
+        num_nodes = self.dA.shape[0]
+        if ipart is None:
+            ipart = np.arange(0, num_nodes)
+        nonzero_indices = self.dA[:, ipart].nonzero()
+        rows = nonzero_indices[0]
+        cols = nonzero_indices[1]
+        direct_children_indices = [rows[np.nonzero(i == cols)].tolist() 
+                                   for i in np.arange(0, len(ipart))]
+        return direct_children_indices
+
 
     def PL(self):
         '''Returns the topological path length to the root for all nodes.'''
@@ -80,7 +96,6 @@ class Topology:
             tmp_PL = self.dA.dot(tmp_PL)
             topological_path_length += counter * tmp_PL
         topological_path_length = topological_path_length.toarray()
-
         return topological_path_length
     
 
@@ -142,16 +157,17 @@ class Topology:
         '''
         num_nodes = self.dA.shape[0]
         BCT_type = self.typeN()
-        BCT_diag = sp.diags(BCT_type, 0, (num_nodes, num_nodes))
-        sum_diag = self.dA.dot(BCT_diag.tocsc())
+        BCT_diag = sp.diags(BCT_type, 0, (num_nodes, num_nodes), format='csc', dtype=int)
+        sum_diag = self.dA.dot(BCT_diag)
         branch_order = sum_diag[:, 0]
         tmp_BO = branch_order.copy()
 
         while tmp_BO.sum() != 0:
             tmp_BO = sum_diag.dot(tmp_BO)
             branch_order = branch_order + tmp_BO
+        branch_order = sp.csc_matrix.toarray(branch_order)
         branch_order[0] = 1
-        branch_order = np.log2(sp.csc_matrix.todense(branch_order)).astype(int)
+        branch_order = np.log2(branch_order).astype(int).flatten()
         return branch_order
 
 
@@ -200,6 +216,41 @@ class Topology:
         ratio_val = vec / vec[direct_parents_indices]
         return ratio_val
     
+
+    def rindex(self):
+        '''Region-specific indexation of nodes in a tree.
+        
+            Returns the region specific index for each region individually increasing
+            in order of appearance within that region.
+        '''
+        regions = np.unique(self.R)
+        region_index = np.array([], dtype=int)
+        for i in range(0, regions.size):
+            current_region_nodes = self.R == regions[i]
+            region_index = np.append(region_index, np.arange(0, np.sum(current_region_nodes)))
+        return region_index
+
+
+    def dist(self, dist_from_root=100):
+        '''Index to tree nodes at um path distance away from root.
+        
+            Returns a binary output in a sparse matrix with the nodes which are in path distance 
+            from the root. If the dist_from_root is a vector, the output distance is a matrix.
+        '''
+        path_vec_cumsum = self.Pvec().reshape(-1, 1)
+        direct_parent_indices = self.idpar()
+        if isinstance(dist_from_root, (int, float)):
+            num_cols = 1
+        else:
+            num_cols = len(dist_from_root)
+        
+        dist_from_root = np.tile(dist_from_root, (path_vec_cumsum.shape[0], 1))
+        distance = sp.csc_matrix(
+            (dist_from_root >= np.tile(path_vec_cumsum[direct_parent_indices], (1, num_cols))) & 
+            (dist_from_root < np.tile(path_vec_cumsum, (1, num_cols))), 
+            dtype=int)
+        return distance
+
 
     # TODO || Figure out how to better incorporate this function in the module
     def __sub(self, inode=0):

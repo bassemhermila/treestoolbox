@@ -56,7 +56,7 @@ class TreeLoader:
       idpar = [x for x in parent_id if x != -1]
       n = len(node_id)
       oners = np.ones(n - 1, dtype=int)
-      self.dA = sp.csr_matrix((oners, (list(range(1, n)), idpar)), shape=(n, n))
+      self.dA = sp.csc_matrix((oners, (list(range(1, n)), idpar)), shape=(n, n))
       self.X = np.array(X)
       self.Y = np.array(Y)
       self.Z = np.array(Z)

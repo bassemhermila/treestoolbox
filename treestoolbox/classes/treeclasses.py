@@ -30,8 +30,8 @@ class Tree(treeio.TreeLoader,
         tree_copy = deepcopy(self)
         return tree_copy
 
-    def sub_tree(self, inode=0):
-        res = self._Topology__sub_tree(inode)
+    def sub(self, inode=0):
+        res = self._Topology__sub(inode)
         return res['subtree_indices'], Tree(name=self.name,
               dA=res['dA'],
               X=res['X'],
