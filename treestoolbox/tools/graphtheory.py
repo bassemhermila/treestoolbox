@@ -312,7 +312,6 @@ class GraphTheory:
             tree = sort_vectors(tree, sorted_indices)
         elif order.lower() == 'lex':
             num_children = self.__get_num_children()
-            # np.ravel(sp.csc_matrix.sum(intree.dA, axis=0))
             sorted_indices = np.argsort(num_children[1:])
             sorted_indices = np.hstack((0, sorted_indices + 1))
             tree = sort_vectors(tree, sorted_indices)

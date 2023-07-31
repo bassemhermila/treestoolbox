@@ -1,8 +1,7 @@
-from tools.graphtheory import GraphTheory
 import numpy as np
 import scipy.sparse as sp
 
-class Metrics(GraphTheory):
+class Metrics:
     def cyl(self, dim='3D', use_dA=False):
         '''Returns the cylinder coordinates of all segments in a tree.
 
@@ -476,8 +475,7 @@ class Metrics(GraphTheory):
                 dZ = tree.Z[i] - tree.Z[path_to_root[i, 1]]
                 xyz = np.sqrt(dX**2 + dY**2 + dZ**2)  # 3D segment length
                 # Find sub-tree indices:
-                sub = tree.sub(i) ############################
-                subtree_indices = sub[0]
+                subtree_indices = tree.sub(i)[0]
                 # Correct for change loss of length, move sub-tree:
                 if xyz == 0:
                     # If original length is zero, no direction is given -> random:

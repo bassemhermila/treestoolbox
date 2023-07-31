@@ -1,11 +1,12 @@
 import scipy.sparse as sp
 import numpy as np
 from copy import deepcopy
-from tools import treeio, metrics, graphtheory
+from tools import treeio, metrics, graphtheory, edit
 
 class Tree(treeio.TreeLoader, 
            metrics.Metrics, 
-           graphtheory.GraphTheory):
+           graphtheory.GraphTheory,
+           edit.Editor):
     '''
     Tree class containing the information of a dendritic morphology.
     '''
