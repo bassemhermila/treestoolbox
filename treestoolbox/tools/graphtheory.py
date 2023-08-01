@@ -281,7 +281,7 @@ class GraphTheory:
         return subtree_indices, subtree
 
 
-    def sort(self, order=''):
+    def sort(self, order=None):
         '''Sorts indices of the nodes in tree to be BCT conform.
         
             Puts the indices in the so-called BCT order, an order in which elements
@@ -294,6 +294,9 @@ class GraphTheory:
             the BCT elements lexicographically. This makes less sense but results in 
             a purely unique equivalence relation.
         '''
+        if order is None:
+            order = ''
+
         def sort_vectors(tree, sorted_indices):
             tree.dA = tree.dA[sorted_indices][:, sorted_indices]
             tree.X = tree.X[sorted_indices]
